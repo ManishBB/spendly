@@ -1,10 +1,21 @@
 import os
 import sqlite3
+from datetime import datetime
 
 from flask import Flask, flash, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash
 
-from database.db import create_user, get_db, get_user_by_email, init_db, seed_db
+from database.db import (
+    create_user,
+    get_category_totals,
+    get_db,
+    get_expense_summary,
+    get_recent_expenses,
+    get_user_by_email,
+    get_user_by_id,
+    init_db,
+    seed_db,
+)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
@@ -98,14 +109,47 @@ def logout():
     return redirect(url_for("login"))
 
 
-# ------------------------------------------------------------------ #
-# Placeholder routes — students will implement these                  #
-# ------------------------------------------------------------------ #
+def _format_date(value, fmt):
+    try:
+        return datetime.fromisoformat(value).strftime(fmt)
+    except (TypeError, ValueError):
+        return value
 
 
 @app.route("/profile")
 def profile():
-    return "Profile page — coming in Step 4"
+    user_id = session.get("user_id")
+    if not user_id:
+        flash("Please sign in to view your profile.", "error")
+        return redirect(url_for("login"))
+
+    user = get_user_by_id(user_id)
+    if user is None:
+        session.clear()
+        return redirect(url_for("login"))
+
+    summary = get_expense_summary(user_id)
+    categories = get_category_totals(user_id)
+    max_total = categories[0]["total"] if categories else 0
+    recent = [
+        {**dict(row), "display_date": _format_date(row["date"], "%d %b %Y")}
+        for row in get_recent_expenses(user_id)
+    ]
+
+    return render_template(
+        "profile.html",
+        user=user,
+        member_since=_format_date(user["created_at"], "%B %Y"),
+        summary=summary,
+        categories=categories,
+        max_total=max_total,
+        recent=recent,
+    )
+
+
+# ------------------------------------------------------------------ #
+# Placeholder routes — students will implement these                  #
+# ------------------------------------------------------------------ #
 
 
 @app.route("/expenses/add")
