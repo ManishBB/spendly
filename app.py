@@ -5,16 +5,12 @@ from datetime import datetime
 from flask import Flask, flash, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash
 
-from database.db import (
-    create_user,
-    get_category_totals,
-    get_db,
-    get_expense_summary,
-    get_recent_expenses,
-    get_user_by_email,
+from database.db import create_user, get_db, get_user_by_email, init_db, seed_db
+from database.queries import (
+    get_category_breakdown,
+    get_recent_transactions,
+    get_summary_stats,
     get_user_by_id,
-    init_db,
-    seed_db,
 )
 
 app = Flask(__name__)
@@ -116,6 +112,33 @@ def _format_date(value, fmt):
         return value
 
 
+# ---- [transaction history] ----
+
+def _transaction_history(user_id):
+    return [
+        {**row, "display_date": _format_date(row["date"], "%d %b %Y")}
+        for row in get_recent_transactions(user_id)
+    ]
+
+# ---- [/transaction history] ----
+
+
+# ---- [summary stats] ----
+
+def _summary_stats(user_id):
+    return get_summary_stats(user_id)
+
+# ---- [/summary stats] ----
+
+
+# ---- [category breakdown] ----
+
+def _category_breakdown(user_id):
+    return get_category_breakdown(user_id)
+
+# ---- [/category breakdown] ----
+
+
 @app.route("/profile")
 def profile():
     user_id = session.get("user_id")
@@ -128,22 +151,13 @@ def profile():
         session.clear()
         return redirect(url_for("login"))
 
-    summary = get_expense_summary(user_id)
-    categories = get_category_totals(user_id)
-    max_total = categories[0]["total"] if categories else 0
-    recent = [
-        {**dict(row), "display_date": _format_date(row["date"], "%d %b %Y")}
-        for row in get_recent_expenses(user_id)
-    ]
-
     return render_template(
         "profile.html",
         user=user,
-        member_since=_format_date(user["created_at"], "%B %Y"),
-        summary=summary,
-        categories=categories,
-        max_total=max_total,
-        recent=recent,
+        member_since=user["member_since"],
+        summary=_summary_stats(user_id),
+        recent=_transaction_history(user_id),
+        categories=_category_breakdown(user_id),
     )
 
 
