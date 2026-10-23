@@ -24,19 +24,19 @@
     <div class="profile-stats">
         <div class="stat-tile">
             <span class="stat-label">Total spent</span>
-            <span class="stat-value">₹{{ "{:,.2f}".format(summary["total"]) }}</span>
-        </div>
-        <div class="stat-tile">
-            <span class="stat-label">This month</span>
-            <span class="stat-value">₹{{ "{:,.2f}".format(summary["month_total"]) }}</span>
+            <span class="stat-value">₹{{ "{:,.2f}".format(summary["total_spent"]) }}</span>
         </div>
         <div class="stat-tile">
             <span class="stat-label">Expenses</span>
-            <span class="stat-value">{{ summary["count"] }}</span>
+            <span class="stat-value">{{ summary["transaction_count"] }}</span>
+        </div>
+        <div class="stat-tile">
+            <span class="stat-label">Top category</span>
+            <span class="stat-value">{{ summary["top_category"] }}</span>
         </div>
     </div>
 
-    {% if summary["count"] == 0 %}
+    {% if summary["transaction_count"] == 0 %}
     <div class="profile-panel profile-empty">
         <h2 class="panel-title">No expenses yet</h2>
         <p>Once you start logging expenses, your spending breakdown and recent activity will show up here.</p>
@@ -49,11 +49,9 @@
             <div class="category-list">
                 {% for row in categories %}
                 <div class="category-row">
-                    <span class="category-name">{{ row["category"] }}</span>
-                    <div class="category-track">
-                        <div class="category-bar" style="width: {{ (row['total'] / max_total * 100) | round(1) }}%"></div>
-                    </div>
-                    <span class="category-amt">₹{{ "{:,.2f}".format(row["total"]) }}</span>
+                    <span class="category-name">{{ row["name"] }}</span>
+                    <progress class="category-bar" value="{{ row["pct"] }}" max="100">{{ row["pct"] }}%</progress>
+                    <span class="category-amt">₹{{ "{:,.2f}".format(row["amount"]) }} <span class="category-pct">{{ row["pct"] }}%</span></span>
                 </div>
                 {% endfor %}
             </div>
