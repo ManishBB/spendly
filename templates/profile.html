@@ -21,6 +21,28 @@
         </div>
     </div>
 
+    <div class="profile-filter">
+        <nav class="filter-presets" aria-label="Date range presets">
+            {% for key, label in presets.items() %}
+            <a class="filter-preset{% if active_range == key %} is-active{% endif %}" href="{{ url_for('profile', range=key) }}">{{ label }}</a>
+            {% endfor %}
+        </nav>
+        <form class="filter-form" method="get" action="{{ url_for('profile') }}">
+            <label class="filter-field">
+                <span class="filter-label">From</span>
+                <input type="date" class="form-input" name="start" value="{{ start }}">
+            </label>
+            <label class="filter-field">
+                <span class="filter-label">To</span>
+                <input type="date" class="form-input" name="end" value="{{ end }}">
+            </label>
+            <button type="submit" class="btn-primary">Apply</button>
+            <a class="btn-ghost" href="{{ url_for('profile') }}">Clear</a>
+        </form>
+    </div>
+
+    <p class="filter-caption">{{ period_label }}</p>
+
     <div class="profile-stats">
         <div class="stat-tile">
             <span class="stat-label">Total spent</span>
@@ -36,11 +58,16 @@
         </div>
     </div>
 
-    {% if summary["transaction_count"] == 0 %}
+    {% if not has_any_expenses %}
     <div class="profile-panel profile-empty">
         <h2 class="panel-title">No expenses yet</h2>
         <p>Once you start logging expenses, your spending breakdown and recent activity will show up here.</p>
         <span class="profile-hint">Add expense — coming soon</span>
+    </div>
+    {% elif summary["transaction_count"] == 0 %}
+    <div class="profile-panel profile-empty">
+        <h2 class="panel-title">No expenses in this period</h2>
+        <p>Try a different date range, or <a class="filter-clear" href="{{ url_for('profile') }}">clear the filter</a> to see everything.</p>
     </div>
     {% else %}
     <div class="profile-grid">
