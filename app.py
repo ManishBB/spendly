@@ -1,6 +1,6 @@
 import os
 import sqlite3
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from flask import Flask, flash, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash
@@ -114,10 +114,12 @@ def _format_date(value, fmt):
 
 # ---- [transaction history] ----
 
-def _transaction_history(user_id):
+def _transaction_history(user_id, start_date=None, end_date=None):
     return [
         {**row, "display_date": _format_date(row["date"], "%d %b %Y")}
-        for row in get_recent_transactions(user_id)
+        for row in get_recent_transactions(
+            user_id, start_date=start_date, end_date=end_date
+        )
     ]
 
 # ---- [/transaction history] ----
@@ -125,18 +127,92 @@ def _transaction_history(user_id):
 
 # ---- [summary stats] ----
 
-def _summary_stats(user_id):
-    return get_summary_stats(user_id)
+def _summary_stats(user_id, start_date=None, end_date=None):
+    return get_summary_stats(user_id, start_date=start_date, end_date=end_date)
 
 # ---- [/summary stats] ----
 
 
 # ---- [category breakdown] ----
 
-def _category_breakdown(user_id):
-    return get_category_breakdown(user_id)
+def _category_breakdown(user_id, start_date=None, end_date=None):
+    return get_category_breakdown(user_id, start_date=start_date, end_date=end_date)
 
 # ---- [/category breakdown] ----
+
+
+# ---- [date filter] ----
+
+DATE_PRESETS = {
+    "this-month": "This month",
+    "last-month": "Last month",
+    "last-3-months": "Last 3 months",
+    "all": "All time",
+}
+
+
+def _parse_date(value):
+    value = (value or "").strip()
+    if not value:
+        return None
+    return date.fromisoformat(value)
+
+
+def _first_of_month(today, months_back):
+    index = today.year * 12 + today.month - 1 - months_back
+    return date(index // 12, index % 12 + 1, 1)
+
+
+def _preset_bounds(key, today):
+    if key == "this-month":
+        return _first_of_month(today, 0), today
+    if key == "last-month":
+        last = _first_of_month(today, 0) - timedelta(days=1)
+        return _first_of_month(today, 1), last
+    if key == "last-3-months":
+        return _first_of_month(today, 2), today
+    return None, None
+
+
+def _resolve_filter(args):
+    key = args.get("range", "")
+    if key in DATE_PRESETS:
+        start, end = _preset_bounds(key, date.today())
+        return start, end, key, None
+
+    try:
+        start = _parse_date(args.get("start"))
+        end = _parse_date(args.get("end"))
+    except ValueError:
+        return None, None, "all", "Invalid date — showing all expenses."
+
+    if start and end and start > end:
+        return None, None, "all", "Start date must be before end date."
+
+    # A custom range highlights no preset; an empty one is the same as "All time".
+    active_range = None if (start or end) else "all"
+    return start, end, active_range, None
+
+
+def _period_label(start, end):
+    fmt = "%d %b %Y"
+    if start and end:
+        return f"Showing {start.strftime(fmt)} – {end.strftime(fmt)}"
+    if start:
+        return f"Showing from {start.strftime(fmt)}"
+    if end:
+        return f"Showing up to {end.strftime(fmt)}"
+    return "Showing all time"
+
+
+def _has_any_expenses(user_id, summary, is_filtered):
+    if summary["transaction_count"] > 0:
+        return True
+    if not is_filtered:
+        return False
+    return _summary_stats(user_id)["transaction_count"] > 0
+
+# ---- [/date filter] ----
 
 
 @app.route("/profile")
@@ -151,13 +227,28 @@ def profile():
         session.clear()
         return redirect(url_for("login"))
 
+    start, end, active_range, error = _resolve_filter(request.args)
+    if error:
+        flash(error, "error")
+
+    start_date = start.isoformat() if start else None
+    end_date = end.isoformat() if end else None
+
+    summary = _summary_stats(user_id, start_date, end_date)
+
     return render_template(
         "profile.html",
         user=user,
         member_since=user["member_since"],
-        summary=_summary_stats(user_id),
-        recent=_transaction_history(user_id),
-        categories=_category_breakdown(user_id),
+        summary=summary,
+        recent=_transaction_history(user_id, start_date, end_date),
+        categories=_category_breakdown(user_id, start_date, end_date),
+        start=start_date or "",
+        end=end_date or "",
+        presets=DATE_PRESETS,
+        active_range=active_range,
+        period_label=_period_label(start, end),
+        has_any_expenses=_has_any_expenses(user_id, summary, bool(start or end)),
     )
 
 
